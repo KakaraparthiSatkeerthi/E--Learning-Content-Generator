@@ -1,0 +1,491 @@
+from transformers import pipeline
+import gradio as gr
+import re
+
+# Cache the model to avoid reloading
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def load_model():
+    return pipeline("text-generation", model="EleutherAI/gpt-neo-125M", device=0)
+
+generator = load_model()
+
+# 📌 AI-Powered Functions with Enhanced Prompts and Post-Processing
+def generate_content(subject, topic):
+    try:
+        prompt = f"Create detailed and engaging learning material for {subject} on the topic '{topic}'. Include examples, explanations, and key points. Keep the content concise and accurate."
+        result = generator(prompt, max_length=200, num_return_sequences=1, do_sample=False, temperature=0.7)[0]["generated_text"]
+        return result.strip()
+    except Exception as e:
+        return f"Error generating content: {str(e)}"
+
+def generate_quiz(topic, num_questions):
+    try:
+        # Predefined quizzes for specific topics
+        predefined_quizzes = {
+            "java": [
+                {
+                    "question": "What is the correct syntax to output 'Hello World' in Java?",
+                    "options": ["System.out.println('Hello World');", "print('Hello World');", "echo 'Hello World';", "Console.WriteLine('Hello World');"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which of the following is not a Java keyword?",
+                    "options": ["class", "if", "elseif", "import"],
+                    "answer": "C"
+                },
+                {
+                    "question": "Which data type is used to create a variable that stores text in Java?",
+                    "options": ["string", "txt", "String", "Text"],
+                    "answer": "C"
+                }
+            ],
+            "python": [
+                {
+                    "question": "Which keyword is used to define a function in Python?",
+                    "options": ["function", "func", "def", "define"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What is the output of: print(2 ** 3)?",
+                    "options": ["6", "8", "9", "12"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which data type is mutable in Python?",
+                    "options": ["tuple", "list", "int", "string"],
+                    "answer": "B"
+                }
+            ],
+            "data structure": [
+                {
+                    "question": "Which data structure uses LIFO (Last In, First Out)?",
+                    "options": ["Queue", "Stack", "Array", "Linked List"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which of the following is a linear data structure?",
+                    "options": ["Binary Tree", "Heap", "Stack", "Graph"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What is the time complexity of searching in a balanced binary search tree?",
+                    "options": ["O(log n)", "O(n)", "O(1)", "O(n^2)"],
+                    "answer": "A"
+                }
+            ],
+            "data science": [
+                {
+                    "question": "Which library is commonly used for data manipulation in Python?",
+                    "options": ["NumPy", "Pandas", "Matplotlib", "Scikit-learn"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is a data frame in data science?",
+                    "options": ["A 1-dimensional array", "A 2-dimensional labeled data structure", "A type of database", "A machine learning algorithm"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which method is used for missing value imputation?",
+                    "options": ["Linear Regression", "Mean/Median substitution", "Random Sampling", "None of the above"],
+                    "answer": "B"
+                }
+            ],
+            "dbms": [
+                {
+                    "question": "What does DBMS stand for?",
+                    "options": ["Data Building Management System", "Database Management System", "Data Backup Management Software", "None of the above"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which language is used for querying in a DBMS?",
+                    "options": ["Python", "SQL", "C++", "Java"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which of the following is an example of a relational database?",
+                    "options": ["MongoDB", "Oracle", "Neo4j", "Cassandra"],
+                    "answer": "B"
+                }
+            ],
+            "c": [
+                {
+                    "question": "Which symbol is used to end a statement in C?",
+                    "options": [".", ";", ":", ","],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is used to define a constant in C?",
+                    "options": ["const", "#define", "static", "final"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is the size of an int data type in C?",
+                    "options": ["2 bytes", "4 bytes", "Depends on system", "8 bytes"],
+                    "answer": "C"
+                }
+            ],
+            "data analytics": [
+                {
+                    "question": "Which of the following is a key component of data analytics?",
+                    "options": ["Data Collection", "Data Analysis", "Data Visualization", "All of the above"],
+                    "answer": "D"
+                },
+                {
+                    "question": "What is the purpose of exploratory data analysis?",
+                    "options": ["To find missing values", "To summarize the main characteristics of data", "To build machine learning models", "None of the above"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which tool is widely used for data visualization?",
+                    "options": ["Tableau", "MySQL", "TensorFlow", "Pandas"],
+                    "answer": "A"
+                }
+            ],
+            "data mining": [
+                {
+                    "question": "What is data mining?",
+                    "options": ["The process of extracting useful information from data", "Storing data in a database", "Analyzing system logs", "None of the above"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which technique is used for market basket analysis?",
+                    "options": ["Clustering", "Association Rule Mining", "Regression", "Classification"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is the purpose of a decision tree?",
+                    "options": ["Classification", "Clustering", "Regression", "Both Classification and Regression"],
+                    "answer": "D"
+                }
+            ],
+            "computer networks": [
+                {
+                    "question": "Which layer of the OSI model is responsible for routing?",
+                    "options": ["Physical Layer", "Transport Layer", "Network Layer", "Session Layer"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What is the full form of TCP?",
+                    "options": ["Transmission Control Protocol", "Transfer Control Protocol", "Transmission Communication Protocol", "Transfer Communication Protocol"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which protocol is used for secure communication?",
+                    "options": ["HTTP", "HTTPS", "FTP", "SMTP"],
+                    "answer": "B"
+                }
+            ],
+            "mathematics": [
+                {
+                    "question": "What is the value of pi (π) approximately?",
+                    "options": ["3.12", "3.14", "3.16", "3.18"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is the square root of 144?",
+                    "options": ["10", "11", "12", "13"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What is 7 times 8?",
+                    "options": ["54", "55", "56", "57"],
+                    "answer": "C"
+                }
+            ],
+            "logical reasoning": [
+                {
+                    "question": "What comes next in the sequence: 2, 4, 8, 16, ...?",
+                    "options": ["18", "20", "32", "64"],
+                    "answer": "C"
+                },
+                {
+                    "question": "If all roses are flowers and some flowers fade quickly, what can we infer?",
+                    "options": ["All flowers are roses", "Some roses fade quickly", "All flowers fade quickly", "Some flowers do not fade quickly"],
+                    "answer": "D"
+                },
+                {
+                    "question": "Which number is odd one out: 5, 10, 15, 18, 20?",
+                    "options": ["5", "15", "18", "20"],
+                    "answer": "C"
+                }
+            ],
+            "chemistry": [
+                {
+                    "question": "What is the chemical symbol for water?",
+                    "options": ["HO", "H2O", "O2", "HO2"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which element is known as the king of chemicals?",
+                    "options": ["Hydrogen", "Oxygen", "Sulphuric Acid", "Nitrogen"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What is the pH of a neutral substance?",
+                    "options": ["0", "7", "14", "1"],
+                    "answer": "B"
+                }
+            ],
+            "physics": [
+                {
+                    "question": "What is the speed of light?",
+                    "options": ["3 x 10^8 m/s", "3 x 10^6 m/s", "3 x 10^5 m/s", "3 x 10^7 m/s"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Who formulated the laws of motion?",
+                    "options": ["Einstein", "Newton", "Tesla", "Bohr"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is the unit of force?",
+                    "options": ["Newton", "Joule", "Watt", "Pascal"],
+                    "answer": "A"
+                }
+            ],
+              "artificial intelligence": [
+                {
+                    "question": "What is the main goal of AI?",
+                    "options": ["To create smart systems", "To replace humans", "To reduce costs", "None of the above"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which language is commonly used for AI development?",
+                    "options": ["Python", "C", "JavaScript", "HTML"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is machine learning?",
+                    "options": ["A subset of AI", "A programming language", "A type of database", "None of the above"],
+                    "answer": "A"
+                }
+            ],
+            "machine learning": [
+                {
+                    "question": "Which algorithm is used for classification?",
+                    "options": ["Linear Regression", "Decision Trees", "K-Means", "None of the above"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is overfitting?",
+                    "options": ["When the model performs well on training data but poorly on test data", "When the model performs poorly on all data", "When the model performs well on all data", "None of the above"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which library is used for ML in Python?",
+                    "options": ["NumPy", "Matplotlib", "Scikit-learn", "Pandas"],
+                    "answer": "C"
+                }
+            ],
+            "cloud computing": [
+                {
+                    "question": "What does SaaS stand for?",
+                    "options": ["Software as a Service", "System as a Software", "Service as a Software", "Software as a System"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which cloud service is used for storage?",
+                    "options": ["Amazon S3", "AWS EC2", "Google BigQuery", "Azure VM"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is virtualization in cloud computing?",
+                    "options": ["Creating virtual machines", "Storing data in the cloud", "Backing up data", "Encrypting data"],
+                    "answer": "A"
+                }
+            ],
+            "blockchain": [
+                {
+                    "question": "What is a blockchain?",
+                    "options": ["A type of database", "A digital ledger", "Both A and B", "None of the above"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What does a miner do in blockchain?",
+                    "options": ["Extract minerals", "Verify transactions", "Store data", "Encrypt data"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which is the first cryptocurrency?",
+                    "options": ["Ethereum", "Bitcoin", "Litecoin", "Ripple"],
+                    "answer": "B"
+                }
+            ],
+            "web development": [
+                {
+                    "question": "What does HTML stand for?",
+                    "options": ["HyperText Markup Language", "HyperTool Machine Language", "Hyperlink Markup Language", "None of the above"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which language is used for styling web pages?",
+                    "options": ["HTML", "JQuery", "CSS", "XML"],
+                    "answer": "C"
+                },
+                {
+                    "question": "What does CSS stand for?",
+                    "options": ["Cascading Style Sheets", "Computer Style Sheets", "Creative Style Sheets", "Colorful Style Sheets"],
+                    "answer": "A"
+                }
+
+             ],
+             "nlp": [
+                {
+                    "question": "What does NLP stand for?",
+                    "options": ["Natural Language Processing", "Natural Logic Programming", "Neural Language Parsing", "None of the above"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which library is commonly used for NLP in Python?",
+                    "options": ["NLTK", "NumPy", "TensorFlow", "Pandas"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is tokenization in NLP?",
+                    "options": ["Breaking text into words or sentences", "Removing stop words", "Converting text to lowercase", "None of the above"],
+                    "answer": "A"
+                }
+            ],
+             "flutter": [
+                {
+                    "question": "What is Flutter primarily used for?",
+                    "options": ["Web Development", "Cross-platform App Development", "Database Management", "Game Development"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which programming language is used with Flutter?",
+                    "options": ["Java", "Dart", "Python", "C++"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is a widget in Flutter?",
+                    "options": ["A small app", "A component for building UI", "A type of database", "A backend service"],
+                    "answer": "B"
+                }
+            ],
+             "english": [
+                {
+                    "question": "Which is a synonym for 'happy'?",
+                    "options": ["Sad", "Joyful", "Angry", "Tired"],
+                    "answer": "B"
+                },
+                {
+                    "question": "What is the past tense of 'run'?",
+                    "options": ["Ran", "Running", "Runned", "Runs"],
+                    "answer": "A"
+                },
+                {
+                    "question": "Which is an example of a noun?",
+                    "options": ["Run", "Beautiful", "Cat", "Quickly"],
+                    "answer": "C"
+                }
+            ],
+            "hindi": [
+                {
+                    "question": "What is the Hindi word for 'Apple'?",
+                    "options": ["सेब", "केला", "आम", "अनार"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is the national language of India?",
+                    "options": ["Hindi", "English", "Tamil", "Bengali"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is the Hindi word for 'Water'?",
+                    "options": ["जल", "आग", "हवा", "धरती"],
+                    "answer": "A"
+                }
+            ],
+            "telugu": [
+                {
+                    "question": "What is the Telugu word for 'Tree'?",
+                    "options": ["చెట్టు", "నది", "గుట్ట", "పూలు"],
+                    "answer": "A"
+                },
+                {
+                    "question": "What is the script used for Telugu language?",
+                    "options": ["Devanagari", "Telugu", "Kannada", "Malayalam"],
+                    "answer": "B"
+                },
+                {
+                    "question": "Which state primarily speaks Telugu?",
+                    "options": ["Andhra Pradesh", "Kerala", "Tamil Nadu", "Maharashtra"],
+                    "answer": "A"
+                }
+            ]
+
+        }
+          # Use predefined quizzes if the topic matches
+        if topic.lower() in predefined_quizzes:
+            quiz = predefined_quizzes[topic.lower()]
+            formatted_quiz = []
+            for idx, q in enumerate(quiz[:num_questions]):
+                formatted_quiz.append(
+                    f"Q{idx+1}: {q['question']}\n"
+                    f"A) {q['options'][0]}\n"
+                    f"B) {q['options'][1]}\n"
+                    f"C) {q['options'][2]}\n"
+                    f"D) {q['options'][3]}\n"
+                    f"Answer: {q['answer']}"
+                )
+            return "\n\n".join(formatted_quiz)
+
+        # Generate quiz dynamically for other topics
+        prompt = f"Generate {num_questions} multiple-choice quiz questions with 4 options and correct answers for the topic '{topic}'. Each question should be relevant and accurate. Format as follows:\n\nQ: [Question]\nA) [Option 1]\nB) [Option 2]\nC) [Option 3]\nD) [Option 4]\nAnswer: [Correct Option]"
+        result = generator(prompt, max_length=500, num_return_sequences=1, do_sample=False, temperature=0.7)[0]["generated_text"]
+
+        # Post-process the quiz output
+        formatted_quiz = []
+        questions = re.split(r'Q:', result)
+        for q in questions:
+            q = q.strip()
+            if q and all(option in q for option in ['A)', 'B)', 'C)', 'D)', 'Answer:']):
+                formatted_quiz.append(f"Q: {q}")
+
+        if not formatted_quiz:
+            return "No valid questions generated. Please try again."
+
+        return "\n\n".join(formatted_quiz)
+    except Exception as e:
+        return f"Error generating quiz: {str(e)}"
+
+def generate_summary(text):
+    try:
+        prompt = f"Summarize the following text into concise and clear bullet points:\n\n{text}\n\nSummary:"
+        result = generator(prompt, max_length=150, num_return_sequences=1, do_sample=False, temperature=0.7)[0]["generated_text"]
+
+        # Post-process the summary to ensure bullet points
+        summary_points = result.split("\n")
+        summary_points = [f"• {point.strip()}" for point in summary_points if point.strip()]
+        return "\n".join(summary_points)
+    except Exception as e:
+        return f"Error generating summary: {str(e)}"
+
+# 📌 Create the Gradio App UI with Enhanced Features
+with gr.Blocks() as app:
+    gr.Markdown("# 📚 AI-Powered E-Learning Content Generator")
+
+    with gr.Tab("📖 Generate Content"):
+        subject_input = gr.Textbox(label="Enter Subject", placeholder="e.g., Mathematics")
+        topic_input = gr.Textbox(label="Enter Topic", placeholder="e.g., Linear Algebra")
+        content_output = gr.Textbox(label="Generated Content", interactive=False, lines=10)
+        content_btn = gr.Button("Generate Content")
+        content_btn.click(generate_content, inputs=[subject_input, topic_input], outputs=content_output)
+
+    with gr.Tab("📝 Generate Quiz"):
+        topic_input_q = gr.Textbox(label="Enter Topic", placeholder="e.g., Mathematics")
+        num_q_input = gr.Number(label="Number of Questions", value=5, precision=0)
+        quiz_output = gr.Textbox(label="Generated Quiz", interactive=False, lines=15)
+        quiz_btn = gr.Button("Generate Quiz")
+        quiz_btn.click(generate_quiz, inputs=[topic_input_q, num_q_input], outputs=quiz_output)
+
+    with gr.Tab("🔍 Generate Summary"):
+        text_input = gr.Textbox(label="Enter Text to Summarize", placeholder="Paste your text here...", lines=10)
+        summary_output = gr.Textbox(label="Generated Summary", interactive=False, lines=10)
+        summary_btn = gr.Button("Generate Summary")
+        summary_btn.click(generate_summary, inputs=text_input, outputs=summary_output)
+
+app.launch()
