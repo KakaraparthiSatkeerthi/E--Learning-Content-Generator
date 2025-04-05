@@ -1,0 +1,2 @@
+!pip install gradio
+!pip install gradio # Install the gradio package
